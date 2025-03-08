@@ -202,11 +202,6 @@ class MMDoubleStreamBlock(nn.Module):
         img_modulated = img_modulated.to(torch.bfloat16)
 
         if condition_type == "token_replace":
-            # img_modulated = modulate(
-            #     img_modulated, shift=img_mod1_shift, scale=img_mod1_scale, condition_type=condition_type,
-            #     tr_shift=tr_img_mod1_shift, tr_scale=tr_img_mod1_scale,
-            #     frist_frame_token_num=frist_frame_token_num
-            # )
             modulate_(img_modulated[:, :frist_frame_token_num], shift=tr_img_mod1_shift, scale=tr_img_mod1_scale)
             modulate_(img_modulated[:, frist_frame_token_num:], shift=img_mod1_shift, scale=img_mod1_scale)
         else:
@@ -286,18 +281,18 @@ class MMDoubleStreamBlock(nn.Module):
         # Calculate the img bloks.
 
         if condition_type == "token_replace":
-            img += apply_gate(self.img_attn_proj(img_attn), gate=img_mod1_gate, condition_type=condition_type,
-                                   tr_gate=tr_img_mod1_gate, frist_frame_token_num=frist_frame_token_num)
-            img += apply_gate(
-                self.img_mlp(
-                    modulate(
-                        self.img_norm2(img), shift=img_mod2_shift, scale=img_mod2_scale, condition_type=condition_type,
-                        tr_shift=tr_img_mod2_shift, tr_scale=tr_img_mod2_scale, frist_frame_token_num=frist_frame_token_num
-                    )
-                ),
-                gate=img_mod2_gate, condition_type=condition_type,
-                tr_gate=tr_img_mod2_gate, frist_frame_token_num=frist_frame_token_num
-            )
+            img_attn = self.img_attn_proj(img_attn)
+            apply_gate_and_accumulate_(img[:, :frist_frame_token_num], img_attn[:, :frist_frame_token_num], gate=tr_img_mod1_gate)
+            apply_gate_and_accumulate_(img[:, frist_frame_token_num:], img_attn[:, frist_frame_token_num:], gate=img_mod1_gate)
+            del img_attn
+            img_modulated = self.img_norm2(img)
+            img_modulated = img_modulated.to(torch.bfloat16)
+            modulate_( img_modulated[:, :frist_frame_token_num], shift=tr_img_mod2_shift, scale=tr_img_mod2_scale)
+            modulate_( img_modulated[:, frist_frame_token_num:], shift=img_mod2_shift, scale=img_mod2_scale)
+            self.img_mlp.apply_(img_modulated)        
+            apply_gate_and_accumulate_(img[:, :frist_frame_token_num], img_modulated[:, :frist_frame_token_num], gate=tr_img_mod2_gate)
+            apply_gate_and_accumulate_(img[:, frist_frame_token_num:], img_modulated[:, frist_frame_token_num:], gate=img_mod2_gate)
+            del img_modulated
         else:
             img_attn = self.img_attn_proj(img_attn)
             apply_gate_and_accumulate_(img, img_attn, gate=img_mod1_gate)
@@ -434,8 +429,6 @@ class MMSingleStreamBlock(nn.Module):
         if condition_type == "token_replace":
             modulate_(img_mod[:, :frist_frame_token_num], shift=tr_mod_shift, scale=tr_mod_scale)
             modulate_(img_mod[:, frist_frame_token_num:], shift=mod_shift, scale=mod_scale)
-            # x_mod = modulate(self.pre_norm(x), shift=mod_shift, scale=mod_scale, condition_type=condition_type,
-            #                  tr_shift=tr_mod_shift, tr_scale=tr_mod_scale, frist_frame_token_num=frist_frame_token_num)
         else:
             modulate_(img_mod, shift=mod_shift, scale=mod_scale)
         txt_mod = self.pre_norm(txt)
@@ -521,9 +514,6 @@ class MMSingleStreamBlock(nn.Module):
         x_mod = x_mod.view(x_mod_shape)
 
         if condition_type == "token_replace":
-            # output = x + apply_gate(output, gate=mod_gate, condition_type=condition_type,
-            #                         tr_gate=tr_mod_gate, frist_frame_token_num=frist_frame_token_num)            
-            # return output 
             apply_gate_and_accumulate_(img[:, :frist_frame_token_num, :], x_mod[:, :frist_frame_token_num, :], gate=tr_mod_gate)
             apply_gate_and_accumulate_(img[:, frist_frame_token_num:, :], x_mod[:, frist_frame_token_num:-txt_len, :], gate=mod_gate)
         else:
