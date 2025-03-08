@@ -798,7 +798,8 @@ class HunyuanVideoSampler(Inference):
             raise ValueError(
                 f"Seed must be an integer, a list of integers, or None, got {seed}."
             )
-        generator = [torch.Generator(self.device).manual_seed(seed) for seed in seeds]
+        generator = [torch.Generator("cuda").manual_seed(seed) for seed in seeds]
+        # generator = [torch.Generator(self.device).manual_seed(seed) for seed in seeds]
         out_dict["seeds"] = seeds
 
         # ========================================================================

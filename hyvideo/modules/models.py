@@ -311,7 +311,7 @@ class MMDoubleStreamBlock(nn.Module):
         txt_modulated = self.txt_norm2(txt)
         txt_modulated = txt_modulated.to(torch.bfloat16)
         modulate_(txt_modulated, shift=txt_mod2_shift, scale=txt_mod2_scale)
-        txt_mlp = self.txt_mlp(txt_modulated) # should delete txt_modulated halfway in mlp
+        txt_mlp = self.txt_mlp(txt_modulated)
         del txt_modulated 
         apply_gate_and_accumulate_(txt, txt_mlp, gate=txt_mod2_gate)
         return img, txt

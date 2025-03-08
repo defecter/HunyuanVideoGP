@@ -452,8 +452,8 @@ class TextEncoder(nn.Module):
                     attention_mask_assistant_crop_end = last_double_return_token_indices
                 else:
                     raise ValueError(f"Unsupported data type: {data_type}")
-
                 text_last_hidden_state = []
+
                 text_attention_mask = []
                 image_last_hidden_state = []
                 image_attention_mask = []

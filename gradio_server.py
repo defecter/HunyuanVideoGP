@@ -707,7 +707,7 @@ def generate_video(
                     embedded_guidance_scale=embedded_guidance_scale,
                     i2v_mode=True,
                     i2v_resolution=resolution, #args.i2v_resolution, 720p , 360p #540p
-                    i2v_image = image_to_continue[video_no-1],
+                    i2v_image = image_to_continue[(video_no-1) % len(image_to_continue)],
                     callback = callback,
                     callback_steps = 1,
                     i2v_stability = stability,
