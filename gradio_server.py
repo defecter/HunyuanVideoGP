@@ -40,7 +40,7 @@ preload =int(args.preload)
 quantizeTransformer = args.quantize_transformer
 
 transformer_choices_t2v=["ckpts/hunyuan-video-t2v-720p/transformers/hunyuan_video_720_bf16.safetensors", "ckpts/hunyuan-video-t2v-720p/transformers/hunyuan_video_720_quanto_int8.safetensors", "ckpts/hunyuan-video-t2v-720p/transformers/fast_hunyuan_video_720_quanto_int8.safetensors"]
-transformer_choices_i2v=["ckpts/hunyuan-video-i2v-720p/transformers/hunyuan_video_i2v_720_bf16.safetensors", "ckpts/hunyuan-video-i2v-720p/transformers/hunyuan_video_i2v_720_quanto_int8.safetensors", "ckpts/hunyuan-video-t2v-720p/transformers/fast_hunyuan_video_720_quanto_int8.safetensors"]
+transformer_choices_i2v=["ckpts/hunyuan-video-i2v-720p/transformers/hunyuan_video_i2v_720_bf16v2.safetensors", "ckpts/hunyuan-video-i2v-720p/transformers/hunyuan_video_i2v_720_quanto_int8v2.safetensors", "ckpts/hunyuan-video-t2v-720p/transformers/fast_hunyuan_video_720_quanto_int8.safetensors"]
 text_encoder_choices = ["ckpts/text_encoder/llava-llama-3-8b-v1_1_vlm_fp16.safetensors", "ckpts/text_encoder/llava-llama-3-8b-v1_1_vlm_quanto_int8.safetensors"]
 
 server_config_filename = "gradio_config.json"
@@ -66,6 +66,11 @@ else:
 transformer_filename_t2v = server_config["transformer_filename"]
 transformer_filename_i2v = server_config.get("transformer_filename_i2v", transformer_choices_i2v[1]) ########
 if transformer_filename_i2v == transformer_choices_t2v[1]:
+    transformer_filename_i2v = transformer_choices_i2v[1]
+
+if transformer_filename_i2v == "ckpts/hunyuan-video-i2v-720p/transformers/hunyuan_video_i2v_720_bf16.safetensors":
+    transformer_filename_i2v = transformer_choices_i2v[0]
+if transformer_filename_i2v == "ckpts/hunyuan-video-i2v-720p/transformers/hunyuan_video_i2v_720_quanto_int8.safetensors":
     transformer_filename_i2v = transformer_choices_i2v[1]
 text_encoder_filename = server_config["text_encoder_filename"]
 if not "vlm" in text_encoder_filename:
@@ -93,11 +98,14 @@ if args.i2v:
     use_image2video = True
 
 args.i2v_mode = use_image2video
+args.i2v_stability= True
 if use_image2video:
-    args.model = "HYVideo-T/2"    
+    args.i2v_condition_type = "token_replace"
+    args.model = "HYVideo-T/2"
     lora_dir =args.lora_dir_i2v
     lora_preselected_preset = args.lora_preset_i2v
 else:
+    args.i2v_condition_type = None
     args.model = "HYVideo-T/2-cfgdistill"
     lora_dir =args.lora_dir
     lora_preselected_preset = args.lora_preset
@@ -163,8 +171,8 @@ offload.default_verboseLevel = verbose_level
 
 download_models(transformer_filename_i2v if use_image2video else transformer_filename_t2v, text_encoder_filename) 
 
-def sanitize_file_name(file_name):
-    return file_name.replace("/","").replace("\\","").replace(":","").replace("|","").replace("?","").replace("<","").replace(">","").replace("\"","") 
+def sanitize_file_name(file_name, rep =""):
+    return file_name.replace("/",rep).replace("\\",rep).replace(":",rep).replace("|",rep).replace("?",rep).replace("<",rep).replace(">",rep).replace("\"",rep) 
 def preprocess_loras(sd):
     if not use_image2video:
         return sd
@@ -299,7 +307,7 @@ def get_auto_attention():
 
 def get_default_steps_flow(fast_hunyan ):
     if use_image2video:
-        return 30, 17 
+        return 30, 7 #17 
     else:
         return 6 if fast_hunyan else 30, 17.0 if fast_hunyan else 7.0 
 
@@ -494,6 +502,7 @@ def generate_video(
     video_to_continue,
     max_frames,
     RIFLEx_setting,
+    stability_setting,
     state,
     progress=gr.Progress() #track_tqdm= True
 
@@ -526,7 +535,13 @@ def generate_video(
     if len(prompt) ==0:
         return
     prompts = prompt.replace("\r", "").split("\n")
+    stability = False
     if use_image2video:
+        if stability_setting == 0:
+            stability = flow_shift <=10
+        else:   
+            stability = stability_setting == 1
+            
         if image_to_continue is not None:
             if isinstance(image_to_continue, list):
                 image_to_continue = [ tup[0] for tup in image_to_continue ]
@@ -695,8 +710,8 @@ def generate_video(
                     i2v_image = image_to_continue[video_no-1],
                     callback = callback,
                     callback_steps = 1,
+                    i2v_stability = stability,
                     enable_riflex= enable_riflex
-
                 )
 
                 # input_image_or_video_path
@@ -778,7 +793,7 @@ def generate_video(
                     video = rearrange(sample.cpu().numpy(), "c t h w -> t h w c")
 
                     time_flag = datetime.fromtimestamp(time.time()).strftime("%Y-%m-%d-%Hh%Mm%Ss")
-                    file_name = f"{time_flag}_seed{outputs['seeds'][i]}_{outputs['prompts'][i][:100].replace('/','').strip()}.mp4".replace(':',' ').replace('\\',' ')
+                    file_name = f"{time_flag}_seed{outputs['seeds'][i]}_{sanitize_file_name(outputs['prompts'][i][:100],' ').strip()}.mp4"
                     idx = 0 
                     basis_video_path = os.path.join(os.getcwd(), "gradio_outputs", file_name)        
                     video_path = basis_video_path
@@ -1097,9 +1112,20 @@ def create_demo():
                         with gr.Row():
                             negative_prompt = gr.Textbox(label="Negative Prompt", value="")
                         with gr.Row():
-                            guidance_scale = gr.Slider(1.0, 20.0, value=1.0, step=0.5, label="Guidance Scale", visible= use_image2video)
-                            embedded_guidance_scale = gr.Slider(1.0, 20.0, value=6.0, step=0.5, label="Embedded Guidance Scale", visible= not use_image2video)
+                            guidance_scale = gr.Slider(1.0, 20.0, value=1.0, step=0.5, label="Guidance Scale", visible= False)
+                            embedded_guidance_scale = gr.Slider(1.0, 20.0, value=6.0, step=0.5, label="Embedded Guidance Scale", visible= True)
                             flow_shift = gr.Slider(0.0, 25.0, value= default_flow_shift, step=0.1, label="Flow Shift") 
+                        with gr.Row():
+                            stability_setting = gr.Dropdown(
+                                choices=[
+                                    ("Auto (On if flow shift less than 10)", 0),
+                                    ("Always On", 1), 
+                                    ("Always Off", 2), 
+                                ],
+                                value=0,
+                                label="Stabilize Movement",
+                                visible=use_image2video
+                            )
                         tea_cache_setting = gr.Dropdown(
                             choices=[
                                 ("Disabled", 0),
@@ -1159,6 +1185,7 @@ def create_demo():
                 video_to_continue,
                 max_frames,
                 RIFLEx_setting,
+                stability_setting,
                 state
             ],
             outputs= [gen_status] #,state 

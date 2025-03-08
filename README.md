@@ -17,6 +17,7 @@
 
 
 ## News
+* 03/07/2025: Version 6.1: Upgraded HunyanVideo Image to Video with new model released today (that obviously replaces the model of yesterday)\ 
 * 03/06/2025: Version 6.0: Support for HunyanVideo Image to Video with Fast generation, Low VRAM (up to 12s video) and Lora support\ 
           You need to do a **pip install -r requirements.txt** if you had already installed the app
 * 02/27/2025: Version 5.1: Added Loras Preset to easily store and share combinations of loras and their multipliers 

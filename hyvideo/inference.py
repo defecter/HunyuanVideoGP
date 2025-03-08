@@ -188,18 +188,23 @@ class Inference(object):
         torch.set_grad_enabled(False)
         # =========================== Build main model ===========================
         logger.info("Building model...")
-
-        if args.i2v_mode:
+       
+        if args.i2v_mode and args.i2v_condition_type == "latent_concat":
             in_channels = args.latent_channels * 2 + 1
+            image_embed_interleave = 2
+        elif args.i2v_mode and args.i2v_condition_type == "token_replace":
+            in_channels = args.latent_channels
+            image_embed_interleave = 4
         else:
             in_channels = args.latent_channels
+            image_embed_interleave = 1
         out_channels = args.latent_channels
         pinToMemory = kwargs.pop("pinToMemory", False)
         partialPinning = kwargs.pop("partialPinning", False)        
         factor_kwargs = kwargs | {"device": "meta", "dtype": PRECISION_TO_TYPE[args.precision]}
 
-        # if args.embedded_cfg_scale:
-        #     factor_kwargs["guidance_embed"] = True
+        if args.embedded_cfg_scale and args.i2v_mode:
+            factor_kwargs["guidance_embed"] = True
 
         model = load_model(
             args,
@@ -211,6 +216,7 @@ class Inference(object):
 
   
         from mmgp import offload
+        # model = Inference.load_state_dict(args, model, pretrained_model_path)
         offload.load_model_data(model, pretrained_model_path, pinToMemory = pinToMemory, partialPinning = partialPinning)
 
         model.eval()
@@ -269,7 +275,8 @@ class Inference(object):
             reproduce=args.reproduce,
             logger=logger,
             device=device if not args.use_cpu_offload else "cpu",
-            text_encoder_path = text_encoder_path 
+            image_embed_interleave=image_embed_interleave,
+   			text_encoder_path = text_encoder_path            
         )
         text_encoder_2 = None
         if args.text_encoder_2 is not None:
@@ -356,7 +363,7 @@ class Inference(object):
         #         raise ValueError(f"Invalid model path: {dit_weight}")
         # if not model_path.exists():
         #     raise ValueError(f"model_path not exists: {model_path}")
-        model_path = pretrained_model_path
+        model_path = "c:/ml/hi2v2.pt" #pretrained_model_path
         logger.info(f"Loading torch model {model_path}...")
         state_dict = torch.load(model_path, map_location=lambda storage, loc: storage)
         bare_model = False
@@ -371,6 +378,9 @@ class Inference(object):
                     f"are: {list(state_dict.keys())}."
                 )
         a, b = model.load_state_dict(state_dict, strict = False, assign = True ) #strict=True, 
+        from mmgp import offload
+        # offload.save_model(model, "E:/ml/hunyuan_video_i2v_720_bf16v2.safetensors")
+        # offload.save_model(model, "E:/ml/hunyuan_video_i2v_720_quanto_int8v2.safetensors", do_quantize=True)
 
         return model
 
@@ -385,7 +395,7 @@ class Inference(object):
         if len(size) != 2:
             raise ValueError(f"Size must be an integer or (height, width), got {size}.")
         return size
-
+  
 
 class HunyuanVideoSampler(Inference):
     def __init__(
@@ -425,7 +435,13 @@ class HunyuanVideoSampler(Inference):
             device=self.device,
         )
 
-        self.default_negative_prompt = NEGATIVE_PROMPT
+        if args.i2v_mode:
+            self.default_negative_prompt = NEGATIVE_PROMPT_I2V
+        else:
+            self.default_negative_prompt = NEGATIVE_PROMPT
+
+        if self.parallel_args['ulysses_degree'] > 1 or self.parallel_args['ring_degree'] > 1:
+            parallelize_transformer(self.pipeline)
 
     def load_diffusion_pipeline(
         self,
@@ -437,7 +453,7 @@ class HunyuanVideoSampler(Inference):
         scheduler=None,
         device=None,
         progress_bar_config=None,
-        data_type="video",
+        #data_type="video",
     ):
         """Load the denoising scheduler for inference."""
         if scheduler is None:
@@ -721,6 +737,8 @@ class HunyuanVideoSampler(Inference):
         i2v_resolution="720p",
         i2v_image=None,
         enable_riflex = False,
+        i2v_condition_type: str = "token_replace",
+        i2v_stability=True,
         **kwargs,
     ):
         """
@@ -895,7 +913,8 @@ class HunyuanVideoSampler(Inference):
                 guidance_scale: {guidance_scale}
                       n_tokens: {n_tokens}
                     flow_shift: {flow_shift}
-       embedded_guidance_scale: {embedded_guidance_scale}"""
+       embedded_guidance_scale: {embedded_guidance_scale}
+                 i2v_stability: {i2v_stability}"""
         logger.debug(debug_str)
 
         callback = kwargs.pop("callback", None)
@@ -924,6 +943,8 @@ class HunyuanVideoSampler(Inference):
             vae_ver=self.args.vae,
             enable_tiling=self.args.vae_tiling,
             i2v_mode=i2v_mode,
+            i2v_condition_type=i2v_condition_type,
+            i2v_stability=i2v_stability,
             img_latents=img_latents,
             semantic_images=semantic_images,
             callback = callback,
