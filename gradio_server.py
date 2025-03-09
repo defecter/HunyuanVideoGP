@@ -894,8 +894,9 @@ def create_demo():
             pass
         else:
             gr.Markdown("The resolution and the duration of the video will depend on the amount of VRAM your GPU has, for instance if you have 24 GB of VRAM (RTX 3090 / RTX 4090), the limits are as follows:")
-            gr.Markdown("- 848 x 480: 261 frames (10.5s) / 385 frames (16s) with Pytorch compilation (please note there is no point going beyond 10.5s duration as the videos will look redundant)")
+            gr.Markdown("- 848 x 480: 261 frames (10.5s) / 385 frames (16s) with Pytorch compilation")
             gr.Markdown("- 1280 x 720: 192 frames (8s) / 261 frames (10.5s) with Pytorch compilation")
+            gr.Markdown("<B>Please note for the moment there is no point going beyond 10.5s duration as the videos may repeat itself or freezes</B>")
         gr.Markdown("In order to find the sweet spot you will need try different resolution / duration and reduce these if the app is hanging : in the very worst case one generation step should not take more than 2 minutes. If it is the case you may be running out of RAM / VRAM.")
         gr.Markdown("Please note that if your turn on compilation, the first generation step of the first video generation will be slow due to the compilation. Therefore all your tests should be done with compilation turned off.")
 
