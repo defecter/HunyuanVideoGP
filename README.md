@@ -33,6 +33,7 @@ Please note that although there will be still sufficient VRAM left, generating v
 
 If you have already installed HunyuanVideoGP, you will need to run *pip install -r requirements.txt*. Upgrading to python 2.6.0 and the corresponding attention libaries is a plus for performance.
 
+* 03/10/2025: Version 4.1: Improved lora presets, they can now  include prompts and comments to guide the user 
 * 02/11/2025: Version 4.0 Quality of life features: fast abort video generation, detect automatically attention modes not supported, you can now change video engine parameters without having to restart the app
 * 02/11/2025: Version 3.5 optimized lora support (reduced VRAM requirements and faster). You can now generate 1280x720 97 frames with Loras in 3 minutes only in the fastest mode
 * 02/10/2025: Version 3.4 New --fast and --fastest switches to automatically get the best performance
@@ -71,6 +72,8 @@ You will find the original Hunyuan Video repository here: https://github.com/Ten
 
 
 ## Installation Guide for Linux and Windows
+
+**If you are looking for a one click installation, just go to the Pinokio App store : https://pinokio.computer/**
 
 We provide an `environment.yml` file for setting up a Conda environment.
 Conda's installation instructions are available [here](https://docs.anaconda.com/free/miniconda/index.html).
@@ -141,22 +144,34 @@ To run the Image to Video application:
 python gradio_server.py --i2v
 ```
 
-### Loras support
+Every lora stored in the subfoler 'loras' for t2v and 'loras_i2v' will be automatically loaded. You will be then able to activate / desactive any of them when running the application by selecting them in the area below "Activated Loras" .
 
-Every lora stored in the subfoler 'loras' will be automatically loaded. You will be then able to activate / desactive any of them when running the application.
+For each activated Lora, you may specify a *multiplier* that is one float number that corresponds to its weight (default is 1.0) .The multipliers for each Lora shoud be separated by a space character or a carriage return. For instance:\
+*1.2 0.8* means that the first lora will have a 1.2 multiplier and the second one will have 0.8. 
 
-For each activated Lora, you may specify a *multiplier* that is one float number that corresponds to its weight (default is 1.0), alternatively you may specify a list of floats multipliers separated by a "," that gives the evolution of this Lora's multiplier over the steps. For instance let's assume there are 30 denoising steps and the multiplier is *0.9,0.8,0.7* then for the steps ranges 0-9, 10-19 and 20-29 the Lora multiplier will be respectively 0.9, 0.8 and 0.7.
+Alternatively for each Lora's multiplier you may specify a list of float numbers multipliers  separated by a "," (no space) that gives the evolution of this Lora's multiplier over the steps. For instance let's assume there are 30 denoising steps and the multiplier is *0.9,0.8,0.7* then for the steps ranges 0-9, 10-19 and 20-29 the Lora multiplier will be respectively 0.9, 0.8 and 0.7. 
 
-You can edit, save or delete Loras presets (combinations of loras with their corresponding multipliers) directly from the gradio interface. Each preset, is a file with ".lset" extension stored in the loras directory and can be shared with other users
+If multiple Loras are defined, remember that each multiplier associated to different Loras should be separated by a space or a carriage return, so we can specify the evolution of multipliers for multiple Loras. For instance for two Loras (press Shift Return to force a carriage return):
 
-Then you can pre activate loras corresponding to a preset when launching the gradio server:
+```
+0.9,0.8,0.7 
+1.2,1.1,1.0
+```
+You can edit, save or delete Loras presets (combinations of loras with their corresponding multipliers) directly from the gradio Web interface. These presets will save the *comment* part of the prompt that should contain some instructions how to use the corresponding the loras (for instance by specifying a trigger word or providing an example).A comment in the prompt is a line that starts that a #. It will be ignored by the video generator. For instance:
+
+```
+# use they keyword ohnvx to trigger the Lora*
+A ohnvx is driving a car
+```
+Each preset, is a file with ".lset" extension stored in the loras directory and can be shared with other users
+
+Last but not least you can pre activate Loras corresponding and prefill a prompt (comments only or full prompt) by specifying a preset when launching the gradio server:
 ```bash
 python gradio_server.py --lora-preset  mylorapreset.lset # where 'mylorapreset.lset' is a preset stored in the 'loras' folder
 ```
 
-Please note that command line parameters *--lora-weight* and *--lora-multiplier* have been deprecated since they are redundant with presets.
+You will find prebuilt Loras on https://civitai.com/ or you will be able to build them with tools such as kohya or onetrainer.
 
-You can find prebuilt Loras on https://civitai.com/ or build them with tools such as kohya or onetrainer.
 
 ### Give me Speed (Text 2 Video only for the moment) !
 If you are a speed addict and are ready to accept some tradeoff on the quality I have added two switches:
@@ -193,10 +208,13 @@ python gradio_server.py --attention sage --compile
 --server-name name : default (0.0.0.0) : Gradio server name\
 --open-browser : open automatically Browser when launching Gradio Server\
 --fast : start the app by loading Fast Hunyuan Video generator (faster but lower quality) + sage attention + teacache x2 
+--lock-config : prevent modifying the video engine configuration from the interface\
+--multiple-images : allow the users to choose multiple images as different starting points for new videos\ 
 --compile : turn on pytorch compilation\
 --fastest : shortcut for --fast + --compile\
 --attention mode: force attention mode among, sdpa, flash, sage and xformers\
 --vae-mode: 0-5, defalt(0) : VAE tiling to be used for latents decoding
+--preload no : number in Megabytes to preload partially the diffusion model in VRAM , may offer slight speed gains especially on older hardware. Works only with profile 2 and 4.
 
 ### Profiles (for power users only)
 You can choose between 5 profiles, these will try to leverage the most your hardware, but have little impact for HunyuanVideo GP:
@@ -227,83 +245,3 @@ A Flux derived application very powerful that can be used to transfer an object 
 
 - YuE GP: https://github.com/deepbeepmeep/YuEGP :\
 A great song generator (instruments + singer's voice) based on prompted Lyrics and a genre description. Thanks to mmgp you can run it with less than 10 GB of VRAM without waiting forever.
-
-
-
-
-### Run through the command line
-```bash
-cd HunyuanVideo
-
-python sample_video.py \
-    --video-size 720 1280 \
-    --video-length 129 \
-    --infer-steps 50 \
-    --prompt "A cat walks on the grass, realistic style." \
-    --flow-reverse \
-    --save-path ./results
-```
-
-Please note currently that profile and the models used need to be mentioned inside the *sample_video.py* file.
-
-### More Configurations for Gradio Server and Command line
-
-We list some more useful configurations for easy usage:
-
-|        Argument        |  Default  |                Description                |
-|:----------------------:|:---------:|:-----------------------------------------:|
-|       `--prompt`       |   None    |   The text prompt for video generation    |
-|     `--video-size`     | 720 1280  |      The size of the generated video      |
-|    `--video-length`    |    129    |     The length of the generated video     |
-|    `--infer-steps`     |    50     |     The number of steps for sampling      |
-| `--embedded-cfg-scale` |    6.0    |    Embeded  Classifier free guidance scale       |
-|     `--flow-shift`     |    7.0    | Shift factor for flow matching schedulers |
-|     `--flow-reverse`   |    False  | If reverse, learning/sampling from t=1 -> t=0 |
-|        `--seed`        |     None  |   The random seed for generating video, if None, we init a random seed    |
-|  `--use-cpu-offload`   |   False   |    Use CPU offload for the model load to save more memory, necessary for high-res video generation    |
-|     `--save-path`      | ./results |     Path to save the generated video      |
-
-## **Abstract**
-We present HunyuanVideo, a novel open-source video foundation model that exhibits performance in video generation that is comparable to, if not superior to, leading closed-source models. In order to train HunyuanVideo model, we adopt several key technologies for model learning, including data curation, image-video joint model training, and an efficient infrastructure designed to facilitate large-scale model training and inference. Additionally, through an effective strategy for scaling model architecture and dataset, we successfully trained a video generative model with over 13 billion parameters, making it the largest among all open-source models. 
-
-We conducted extensive experiments and implemented a series of targeted designs to ensure high visual quality, motion diversity, text-video alignment, and generation stability. According to professional human evaluation results, HunyuanVideo outperforms previous state-of-the-art models, including Runway Gen-3, Luma 1.6, and 3 top-performing Chinese video generative models. By releasing the code and weights of the foundation model and its applications, we aim to bridge the gap between closed-source and open-source video foundation models. This initiative will empower everyone in the community to experiment with their ideas, fostering a more dynamic and vibrant video generation ecosystem. 
-
-
-
-## 🔗 BibTeX
-If you find [HunyuanVideo](https://arxiv.org/abs/2412.03603) useful for your research and applications, please cite using this BibTeX:
-
-```BibTeX
-@misc{kong2024hunyuanvideo,
-      title={HunyuanVideo: A Systematic Framework For Large Video Generative Models}, 
-      author={Weijie Kong, Qi Tian, Zijian Zhang, Rox Min, Zuozhuo Dai, Jin Zhou, Jiangfeng Xiong, Xin Li, Bo Wu, Jianwei Zhang, Kathrina Wu, Qin Lin, Aladdin Wang, Andong Wang, Changlin Li, Duojun Huang, Fang Yang, Hao Tan, Hongmei Wang, Jacob Song, Jiawang Bai, Jianbing Wu, Jinbao Xue, Joey Wang, Junkun Yuan, Kai Wang, Mengyang Liu, Pengyu Li, Shuai Li, Weiyan Wang, Wenqing Yu, Xinchi Deng, Yang Li, Yanxin Long, Yi Chen, Yutao Cui, Yuanbo Peng, Zhentao Yu, Zhiyu He, Zhiyong Xu, Zixiang Zhou, Zunnan Xu, Yangyu Tao, Qinglin Lu, Songtao Liu, Dax Zhou, Hongfa Wang, Yong Yang, Di Wang, Yuhong Liu, and Jie Jiang, along with Caesar Zhong},
-      year={2024},
-      archivePrefix={arXiv preprint arXiv:2412.03603},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2412.03603}, 
-}
-```
-
-
-
-## 🧩 Projects that use HunyuanVideo
-
-If you develop/use HunyuanVideo in your projects, welcome to let us know.
-
-- ComfyUI (with support for F8 Inference and Video2Video Generation): [ComfyUI-HunyuanVideoWrapper](https://github.com/kijai/ComfyUI-HunyuanVideoWrapper) by [Kijai](https://github.com/kijai)
-
-
-
-## Acknowledgements
-
-We would like to thank the contributors to the [SD3](https://huggingface.co/stabilityai/stable-diffusion-3-medium), [FLUX](https://github.com/black-forest-labs/flux), [Llama](https://github.com/meta-llama/llama), [LLaVA](https://github.com/haotian-liu/LLaVA), [Xtuner](https://github.com/InternLM/xtuner), [diffusers](https://github.com/huggingface/diffusers) and [HuggingFace](https://huggingface.co) repositories, for their open research and exploration.
-Additionally, we also thank the Tencent Hunyuan Multimodal team for their help with the text encoder. 
-
-## Star History
-<a href="https://star-history.com/#Tencent/HunyuanVideo&Date">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Tencent/HunyuanVideo&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Tencent/HunyuanVideo&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Tencent/HunyuanVideo&type=Date" />
- </picture>
-</a>

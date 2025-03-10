@@ -30,18 +30,18 @@ def add_network_args(parser: argparse.ArgumentParser):
     )
 
 
-    group.add_argument(
-        "--lora-dir-i2v",
-        type=str,
-        default="loras_i2v",
-        help="Path to a directory that contains Loras for i2v"
-    )
+    # group.add_argument(
+    #     "--lora-dir-i2v",
+    #     type=str,
+    #     default="loras_i2v",
+    #     help="Path to a directory that contains Loras for i2v"
+    # )
 
 
     group.add_argument(
         "--lora-dir",
         type=str,
-        default="loras",
+        default="",
         help="Path to a directory that contains Loras"
     )
 
@@ -53,12 +53,12 @@ def add_network_args(parser: argparse.ArgumentParser):
         help="Lora preset to preload"
     )
 
-    group.add_argument(
-        "--lora-preset-i2v",
-        type=str,
-        default="",
-        help="Lora preset to preload for i2v"
-    )
+    # group.add_argument(
+    #     "--lora-preset-i2v",
+    #     type=str,
+    #     default="",
+    #     help="Lora preset to preload for i2v"
+    # )
 
     group.add_argument(
         "--profile",

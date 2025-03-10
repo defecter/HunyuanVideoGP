@@ -52,6 +52,7 @@ if not Path(server_config_filename).is_file():
                      "text_encoder_filename" : text_encoder_choices[1],
                      "compile" : "",
                      "default_ui": "t2v",
+                     "boost" : 1,                     
                      "vae_config": 0,
                      "profile" : profile_type.LowRAM_LowVRAM }
 
@@ -86,6 +87,7 @@ if len(args.attention)> 0:
 
 profile =  force_profile_no if force_profile_no >=0 else server_config["profile"]
 compile = server_config.get("compile", "")
+boost = server_config.get("boost", 1)   
 vae_config = server_config.get("vae_config", 0)
 if len(args.vae_config) > 0:
     vae_config = int(args.vae_config)
@@ -102,13 +104,16 @@ args.i2v_stability= True
 if use_image2video:
     args.i2v_condition_type = "token_replace"
     args.model = "HYVideo-T/2"
-    lora_dir =args.lora_dir_i2v
-    lora_preselected_preset = args.lora_preset_i2v
+    # lora_dir =args.lora_dir_i2v
+    # lora_preselected_preset = args.lora_preset_i2v
 else:
     args.i2v_condition_type = None
     args.model = "HYVideo-T/2-cfgdistill"
-    lora_dir =args.lora_dir
-    lora_preselected_preset = args.lora_preset
+lora_dir =args.lora_dir
+if len(lora_dir) ==0:
+    lora_dir = "loras_i2v" if use_image2video else "loras"
+lora_preselected_preset = args.lora_preset
+
 
 default_tea_cache = 0
 if args.fast or args.fastest:
@@ -226,7 +231,16 @@ def extract_preset(lset_name, loras):
         raise gr.Error(f"Unable to apply Lora preset '{lset_name} because the following Loras files are missing: {missing_loras}")
     
     loras_mult_choices = lset["loras_mult"]
-    return loras_choices, loras_mult_choices
+    prompt = lset.get("prompt", "")
+    return loras_choices, loras_mult_choices, prompt, lset.get("full_prompt", False)
+
+def  get_default_prompt(i2v):
+    if i2v:
+        return "Several giant wooly mammoths approach treading through a snowy meadow, their long wooly fur lightly blows in the wind as they walk, snow covered trees and dramatic snow capped mountains in the distance, mid afternoon light with wispy clouds and a sun high in the distance creates a warm glow, the low camera view is stunning capturing the large furry mammal with beautiful photography, depth of field."
+    else:
+        return "A large orange octopus is seen resting on the bottom of the ocean floor, blending in with the sandy and rocky terrain. Its tentacles are spread out around its body, and its eyes are closed. The octopus is unaware of a king crab that is crawling towards it from behind a rock, its claws raised and ready to attack. The crab is brown and spiny, with long legs and antennae. The scene is captured from a wide angle, showing the vastness and depth of the ocean. The water is clear and blue, with rays of sunlight filtering through. The shot is sharp and crisp, with a high dynamic range. The octopus and the crab are in focus, while the background is slightly blurred, creating a depth of field effect."
+
+    
 
 def setup_loras(pipe,  lora_dir, lora_preselected_preset, split_linear_modules_map = None):
     # lora_weight =["ckpts/arny_lora.safetensors"] # 'ohwx person' ,; 'wick'
@@ -244,7 +258,7 @@ def setup_loras(pipe,  lora_dir, lora_preselected_preset, split_linear_modules_m
             raise Exception("--lora-dir should be a path to a directory that contains Loras")
 
     default_lora_preset = ""
-
+    default_prompt = ""
     if lora_dir != None:
         import glob
         dir_loras =  glob.glob( os.path.join(lora_dir , "*.sft") ) + glob.glob( os.path.join(lora_dir , "*.safetensors") ) 
@@ -263,9 +277,11 @@ def setup_loras(pipe,  lora_dir, lora_preselected_preset, split_linear_modules_m
         if not os.path.isfile(os.path.join(lora_dir, lora_preselected_preset + ".lset")):
             raise Exception(f"Unknown preset '{lora_preselected_preset}'")
         default_lora_preset = lora_preselected_preset
-        default_loras_choices, default_loras_multis_str= extract_preset(default_lora_preset, loras)
+        default_loras_choices, default_loras_multis_str, default_prompt, _ = extract_preset(default_lora_preset, loras)
+    if len(default_prompt) == 0:
+        default_prompt = get_default_prompt(use_image2video)
 
-    return loras, loras_names, default_loras_choices, default_loras_multis_str, default_lora_preset, loras_presets
+    return loras, loras_names, default_loras_choices, default_loras_multis_str, default_prompt, default_lora_preset, loras_presets
 
 
 def load_models(i2v,  lora_dir,  lora_preselected_preset ):
@@ -290,13 +306,13 @@ def load_models(i2v,  lora_dir,  lora_preselected_preset ):
 
     split_linear_modules_map = get_linear_split_map()
     offload.split_linear_modules(pipe.transformer, split_linear_modules_map )
-    loras, loras_names, default_loras_choices, default_loras_multis_str, default_lora_preset, loras_presets = setup_loras(pipe,  lora_dir, lora_preselected_preset, split_linear_modules_map)
+    loras, loras_names, default_loras_choices, default_loras_multis_str, default_prompt, default_lora_preset, loras_presets = setup_loras(pipe,  lora_dir, lora_preselected_preset, split_linear_modules_map)
     offloadobj = offload.profile(pipe, profile_no= profile, compile = compile, quantizeTransformer = quantizeTransformer, **kwargs)  
 
 
-    return hunyuan_video_sampler, offloadobj, loras, loras_names, default_loras_choices, default_loras_multis_str, default_lora_preset, loras_presets
+    return hunyuan_video_sampler, offloadobj, loras, loras_names, default_loras_choices, default_loras_multis_str, default_prompt, default_lora_preset, loras_presets
 
-hunyuan_video_sampler, offloadobj,  loras, loras_names, default_loras_choices, default_loras_multis_str, default_lora_preset, loras_presets = load_models(use_image2video, lora_dir, lora_preselected_preset )
+hunyuan_video_sampler, offloadobj,  loras, loras_names, default_loras_choices, default_loras_multis_str, default_prompt, default_lora_preset, loras_presets = load_models(use_image2video, lora_dir, lora_preselected_preset )
 gen_in_progress = False
 
 def get_auto_attention():
@@ -334,6 +350,7 @@ def apply_changes(  state,
                     profile_choice,
                     vae_config_choice,
                     default_ui_choice ="t2v",
+                    boost_choice = 1
 ):
 
     if args.lock_config:
@@ -342,7 +359,7 @@ def apply_changes(  state,
     if gen_in_progress:
         yield "<DIV ALIGN=CENTER>Unable to change config when a generation is in progress</DIV>"
         return
-    global offloadobj, hunyuan_video_sampler, loras, loras_names, default_loras_choices, default_loras_multis_str, default_lora_preset, loras_presets
+    global offloadobj, hunyuan_video_sampler, loras, loras_names, default_loras_choices, default_loras_multis_str, default_prompt, default_lora_preset, loras_presets
     server_config = {"attention_mode" : attention_choice,  
                      "transformer_filename": transformer_choices_t2v[transformer_t2v_choice], 
                      "transformer_filename_i2v": transformer_choices_i2v[transformer_i2v_choice],  ##########
@@ -351,6 +368,7 @@ def apply_changes(  state,
                      "profile" : profile_choice,
                      "vae_config" : vae_config_choice,
                      "default_ui" : default_ui_choice,
+                     "boost" : boost_choice,
                        }
 
     if Path(server_config_filename).is_file():
@@ -378,7 +396,7 @@ def apply_changes(  state,
     state["config_new"] = server_config
     state["config_old"] = old_server_config
 
-    global attention_mode, profile, compile, transformer_filename_t2v, transformer_filename_i2v, text_encoder_filename, vae_config
+    global attention_mode, profile, compile, transformer_filename_t2v, transformer_filename_i2v, text_encoder_filename, vae_config, boost
     attention_mode = server_config["attention_mode"]
     profile = server_config["profile"]
     compile = server_config["compile"]
@@ -386,8 +404,9 @@ def apply_changes(  state,
     transformer_filename_i2v = server_config["transformer_filename_i2v"]
     text_encoder_filename = server_config["text_encoder_filename"]
     vae_config = server_config["vae_config"]
+    boost = server_config["boost"]
 
-    if  all(change in ["attention_mode", "vae_config"] for change in changes ):
+    if  all(change in ["attention_mode", "vae_config", "boost", "default_ui"] for change in changes ):
         if "attention_mode" in changes:
             pass
 
@@ -397,7 +416,7 @@ def apply_changes(  state,
         offloadobj = None
         yield "<DIV ALIGN=CENTER>Please wait while the new configuration is being applied</DIV>"
 
-        hunyuan_video_sampler, offloadobj,  loras, loras_names, default_loras_choices, default_loras_multis_str, default_lora_preset, loras_presets = load_models(use_image2video, lora_dir,  lora_preselected_preset )
+        hunyuan_video_sampler, offloadobj,  loras, loras_names, default_loras_choices, default_loras_multis_str, default_prompt, default_lora_preset, loras_presets = load_models(use_image2video, lora_dir,  lora_preselected_preset )
 
 
     yield "<DIV ALIGN=CENTER>The new configuration has been succesfully applied</DIV>"
@@ -535,6 +554,9 @@ def generate_video(
     if len(prompt) ==0:
         return
     prompts = prompt.replace("\r", "").split("\n")
+    prompts = [prompt for prompt in prompts if len(prompt)>0 and not prompt.startswith("#")]
+    if len(prompts) ==0:
+        return    
     stability = False
     if use_image2video:
         if stability_setting == 0:
@@ -584,6 +606,9 @@ def generate_video(
                 return False
         list_mult_choices_nums = []
         if len(loras_mult_choices) > 0:
+            loras_mult_choices_list = loras_mult_choices.replace("\r", "").split("\n")
+            loras_mult_choices_list = [multi for multi in loras_mult_choices_list if len(multi)>0 and not multi.startswith("#")]
+            loras_mult_choices = " ".join(loras_mult_choices_list)
             list_mult_choices_str = loras_mult_choices.split(" ")
             for i, mult in enumerate(list_mult_choices_str):
                 mult = mult.strip()
@@ -821,7 +846,24 @@ def generate_video(
 
 new_preset_msg = "Enter a Name for a Lora Preset or Choose One Above"
 
-def save_lset(lset_name, loras_choices, loras_mult_choices):
+def validate_delete_lset(lset_name):
+    if len(lset_name) == 0 or lset_name == new_preset_msg:
+        gr.Info(f"Choose a Preset to delete")
+        return  gr.Button(visible= True), gr.Checkbox(visible= True), gr.Button(visible= True), gr.Button(visible= False), gr.Button(visible= False) 
+    else:
+        return  gr.Button(visible= False), gr.Checkbox(visible= False), gr.Button(visible= False), gr.Button(visible= True), gr.Button(visible= True) 
+    
+def validate_save_lset(lset_name):
+    if len(lset_name) == 0 or lset_name == new_preset_msg:
+        gr.Info("Please enter a name for the preset")
+        return  gr.Button(visible= True), gr.Checkbox(visible= True), gr.Button(visible= True), gr.Button(visible= False), gr.Button(visible= False),gr.Checkbox(visible= False) 
+    else:
+        return  gr.Button(visible= False), gr.Button(visible= False), gr.Button(visible= False), gr.Button(visible= True), gr.Button(visible= True),gr.Checkbox(visible= True)
+
+def cancel_lset():
+    return gr.Button(visible= True), gr.Button(visible= True), gr.Button(visible= True), gr.Button(visible= False), gr.Button(visible= False), gr.Button(visible= False), gr.Checkbox(visible= False)
+
+def save_lset(lset_name, loras_choices, loras_mult_choices, prompt, save_lset_prompt_cbox):
     global loras_presets
     
     if len(lset_name) == 0 or lset_name== new_preset_msg:
@@ -832,6 +874,14 @@ def save_lset(lset_name, loras_choices, loras_mult_choices):
 
         loras_choices_files = [ Path(loras[int(choice_no)]).parts[-1] for choice_no in loras_choices  ]
         lset  = {"loras" : loras_choices_files, "loras_mult" : loras_mult_choices}
+        if save_lset_prompt_cbox!=1:
+            prompts = prompt.replace("\r", "").split("\n")
+            prompts = [prompt for prompt in prompts if len(prompt)> 0 and prompt.startswith("#")]
+            prompt = "\n".join(prompts)
+
+        if len(prompt) > 0:
+            lset["prompt"] = prompt
+        lset["full_prompt"] = save_lset_prompt_cbox ==1
         lset_name_filename = lset_name + ".lset" 
         full_lset_name_filename = os.path.join(lora_dir, lset_name_filename) 
 
@@ -846,7 +896,7 @@ def save_lset(lset_name, loras_choices, loras_mult_choices):
         lset_choices = [ ( preset, preset) for preset in loras_presets ]
         lset_choices.append( (new_preset_msg, ""))
 
-    return gr.Dropdown(choices=lset_choices, value= lset_name)
+    return gr.Dropdown(choices=lset_choices, value= lset_name), gr.Button(visible= True), gr.Button(visible= True), gr.Button(visible= True), gr.Button(visible= False), gr.Button(visible= False), gr.Checkbox(visible= False)
 
 def delete_lset(lset_name):
     global loras_presets
@@ -864,17 +914,24 @@ def delete_lset(lset_name):
 
     lset_choices = [ (preset, preset) for preset in loras_presets]
     lset_choices.append((new_preset_msg, ""))
-    return  gr.Dropdown(choices=lset_choices, value= lset_choices[pos][1])
+    return  gr.Dropdown(choices=lset_choices, value= lset_choices[pos][1]), gr.Button(visible= True), gr.Button(visible= True), gr.Button(visible= True), gr.Button(visible= False), gr.Checkbox(visible= False)
 
-def apply_lset(lset_name, loras_choices, loras_mult_choices):
+def apply_lset(lset_name, loras_choices, loras_mult_choices, prompt):
 
     if len(lset_name) == 0 or lset_name== new_preset_msg:
         gr.Info("Please choose a preset in the list or create one")
     else:
-        loras_choices, loras_mult_choices= extract_preset(lset_name, loras)
+        loras_choices, loras_mult_choices, preset_prompt, full_prompt = extract_preset(lset_name, loras)
+        if full_prompt:
+            prompt = preset_prompt
+        elif len(preset_prompt) > 0:
+            prompts = prompt.replace("\r", "").split("\n")
+            prompts = [prompt for prompt in prompts if len(prompt)>0 and not prompt.startswith("#")]
+            prompt = "\n".join(prompts) 
+            prompt = preset_prompt + '\n' + prompt
         gr.Info(f"Lora Preset '{lset_name}' has been applied")
 
-    return loras_choices, loras_mult_choices
+    return loras_choices, loras_mult_choices, prompt
 
 def create_demo():
     
@@ -1030,10 +1087,8 @@ def create_demo():
                 else:
                     image_to_continue = gr.Image(label= "Image as a starting point for a new video",type ="pil", visible=use_image2video)
 
-                if use_image2video:
-                    prompt = gr.Textbox(label="Prompts (multiple prompts separated by carriage returns will generate multiple videos)", value="Several giant wooly mammoths approach treading through a snowy meadow, their long wooly fur lightly blows in the wind as they walk, snow covered trees and dramatic snow capped mountains in the distance, mid afternoon light with wispy clouds and a sun high in the distance creates a warm glow, the low camera view is stunning capturing the large furry mammal with beautiful photography, depth of field.", lines=3)
-                else:
-                    prompt = gr.Textbox(label="Prompts (multiple prompts separated by carriage returns will generate multiple videos)", value="A large orange octopus is seen resting on the bottom of the ocean floor, blending in with the sandy and rocky terrain. Its tentacles are spread out around its body, and its eyes are closed. The octopus is unaware of a king crab that is crawling towards it from behind a rock, its claws raised and ready to attack. The crab is brown and spiny, with long legs and antennae. The scene is captured from a wide angle, showing the vastness and depth of the ocean. The water is clear and blue, with rays of sunlight filtering through. The shot is sharp and crisp, with a high dynamic range. The octopus and the crab are in focus, while the background is slightly blurred, creating a depth of field effect.", lines=3)
+                prompt = gr.Textbox(label="Prompts (multiple prompts separated by carriage returns will generate multiple videos, lines that starts with # are ignored)", value=default_prompt, lines=3)
+
                 with gr.Row():
 
                     if use_image2video:
@@ -1089,9 +1144,21 @@ def create_demo():
                         # with gr.Column():
                         with gr.Row(height=17):
                             apply_lset_btn = gr.Button("Apply Lora Preset", size="sm", min_width= 1)
+                            # save_lset_prompt_cbox = gr.Checkbox(label="Save Prompt Comments in Preset", value=False, visible= False)
+                            save_lset_prompt_drop= gr.Dropdown(
+                                choices=[
+                                    ("Save Prompt Comments Only", 0),
+                                    ("Save Full Prompt", 1)
+                                ],  show_label= False, container=False, visible= False
+                            ) 
+
+
                         with gr.Row(height=17):
+                            confirm_save_lset_btn = gr.Button("Go Ahead Save it !", size="sm", min_width= 1, visible=False) 
+                            confirm_delete_lset_btn = gr.Button("Go Ahead Delete it !", size="sm", min_width= 1, visible=False) 
                             save_lset_btn = gr.Button("Save", size="sm", min_width= 1)
                             delete_lset_btn = gr.Button("Delete", size="sm", min_width= 1)
+                            cancel_lset_btn = gr.Button("Don't do it !", size="sm", min_width= 1 , visible=False)  
 
 
                 loras_choices = gr.Dropdown(
@@ -1103,7 +1170,7 @@ def create_demo():
                     visible= len(loras)>0,
                     label="Activated Loras"
                 )
-                loras_mult_choices = gr.Textbox(label="Loras Multipliers (1.0 by default) separated by space characters or carriage returns", value=default_loras_multis_str, visible= len(loras)>0 )
+                loras_mult_choices = gr.Textbox(label="Loras Multipliers (1.0 by default) separated by space characters or carriage returns, line that starts with # are ignored", value=default_loras_multis_str, visible= len(loras)>0 )
 
                 show_advanced = gr.Checkbox(label="Show Advanced Options", value=False)
                 with gr.Row(visible=False) as advanced_row:
@@ -1157,9 +1224,13 @@ def create_demo():
                 generate_btn = gr.Button("Generate")
                 abort_btn = gr.Button("Abort")
 
-        save_lset_btn.click(save_lset, inputs=[lset_name, loras_choices, loras_mult_choices], outputs=[lset_name])
-        delete_lset_btn.click(delete_lset, inputs=[lset_name], outputs=[lset_name])
-        apply_lset_btn.click(apply_lset, inputs=[lset_name,loras_choices, loras_mult_choices], outputs=[loras_choices, loras_mult_choices])
+        save_lset_btn.click(validate_save_lset, inputs=[lset_name], outputs=[apply_lset_btn, delete_lset_btn, save_lset_btn,confirm_save_lset_btn, cancel_lset_btn, save_lset_prompt_drop])
+        confirm_save_lset_btn.click(save_lset, inputs=[lset_name, loras_choices, loras_mult_choices, prompt, save_lset_prompt_drop], outputs=[lset_name, apply_lset_btn, delete_lset_btn, save_lset_btn, confirm_save_lset_btn, cancel_lset_btn, save_lset_prompt_drop])
+        delete_lset_btn.click(validate_delete_lset, inputs=[lset_name], outputs=[apply_lset_btn, delete_lset_btn, save_lset_btn,confirm_delete_lset_btn, cancel_lset_btn ])
+        confirm_delete_lset_btn.click(delete_lset, inputs=[lset_name], outputs=[lset_name, apply_lset_btn, delete_lset_btn, save_lset_btn,confirm_delete_lset_btn, cancel_lset_btn ])
+        cancel_lset_btn.click(cancel_lset, inputs=[], outputs=[apply_lset_btn, delete_lset_btn, save_lset_btn, confirm_delete_lset_btn,confirm_save_lset_btn, cancel_lset_btn,save_lset_prompt_drop ])
+
+        apply_lset_btn.click(apply_lset, inputs=[lset_name,loras_choices, loras_mult_choices, prompt], outputs=[loras_choices, loras_mult_choices, prompt])
 
         gen_status.change(refresh_gallery, inputs = [state], outputs = output )
 
