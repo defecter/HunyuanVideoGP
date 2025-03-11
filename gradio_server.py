@@ -104,12 +104,12 @@ args.i2v_stability= True
 if use_image2video:
     args.i2v_condition_type = "token_replace"
     args.model = "HYVideo-T/2"
-    # lora_dir =args.lora_dir_i2v
-    # lora_preselected_preset = args.lora_preset_i2v
 else:
     args.i2v_condition_type = None
     args.model = "HYVideo-T/2-cfgdistill"
 lora_dir =args.lora_dir
+if use_image2video and len(lora_dir)==0:
+    lora_dir =args.lora_dir_i2v
 if len(lora_dir) ==0:
     lora_dir = "loras_i2v" if use_image2video else "loras"
 lora_preselected_preset = args.lora_preset
