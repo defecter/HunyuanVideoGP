@@ -1016,7 +1016,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         # if is_progress_bar:
         with self.progress_bar(total=num_inference_steps) as progress_bar:
             for i, t in enumerate(timesteps):
-                offload.set_step_no_for_lora(i)
+                offload.set_step_no_for_lora(self.transformer, i)
                 if self.interrupt:
                     continue
                 import os
@@ -1146,7 +1146,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
                         progress_bar.update()
                     if callback is not None and i % callback_steps == 0:
                         step_idx = i // getattr(self.scheduler, "order", 1)
-                        callback(step_idx, t, latents)
+                        callback(step_idx, t)
 
         if self.interrupt:
             return [None]

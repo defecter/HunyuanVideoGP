@@ -17,7 +17,7 @@ from .mlp_layers import MLP, MLPEmbedder, FinalLayer
 from .modulate_layers import ModulateDiT, modulate, modulate_ , apply_gate, apply_gate_and_accumulate_
 from .token_refiner import SingleTokenRefiner
 import numpy as np
-
+from mmgp import offload
 
 def get_linear_split_map():
     hidden_size = 3072
@@ -753,6 +753,11 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
             ow // self.patch_size[2],
         )
 
+        def check_callback_required():
+            if "refresh" in offload.shared_state:
+                del offload.shared_state["refresh"]
+                offload.shared_state["callback"](-1, -1, True)
+            
         # Prepare modulation vectors.
         vec = self.time_in(t)
 
@@ -882,6 +887,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
                 ori_img = img.clone()
                 # --------------------- Pass through DiT blocks ------------------------
                 for _, block in enumerate(self.double_blocks):
+                    check_callback_required()
                     if pipeline._interrupt:
                         return None
                     double_block_args = [
@@ -907,6 +913,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
                 # del img, txt
                 if len(self.single_blocks) > 0:
                     for _, block in enumerate(self.single_blocks):
+                        check_callback_required()
                         if pipeline._interrupt:
                             return None
                         single_block_args = [
@@ -933,6 +940,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
         else:        
             # --------------------- Pass through DiT blocks ------------------------
             for _, block in enumerate(self.double_blocks):
+                check_callback_required()
                 if pipeline._interrupt:
                     return None
 
@@ -960,6 +968,7 @@ class HYVideoDiffusionTransformer(ModelMixin, ConfigMixin):
             # del img, txt
             if len(self.single_blocks) > 0:
                 for _, block in enumerate(self.single_blocks):
+                    check_callback_required()
                     if pipeline._interrupt:
                         return None
 

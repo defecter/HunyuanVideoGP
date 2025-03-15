@@ -33,6 +33,7 @@ Please note that although there will be still sufficient VRAM left, generating v
 
 If you have already installed HunyuanVideoGP, you will need to run *pip install -r requirements.txt*. Upgrading to python 2.6.0 and the corresponding attention libaries is a plus for performance.
 
+* 03/15/2025: Version 4.2: Lora Fest special edition: very fast loading / unload of loras for those Loras collectors around.  You can also now add / remove loras in the Lora folders without restarting the app. You will need to refresh the requirements *pip install -r requirements.txt*
 * 03/10/2025: Version 4.1: Improved lora presets, they can now  include prompts and comments to guide the user 
 * 02/11/2025: Version 4.0 Quality of life features: fast abort video generation, detect automatically attention modes not supported, you can now change video engine parameters without having to restart the app
 * 02/11/2025: Version 3.5 optimized lora support (reduced VRAM requirements and faster). You can now generate 1280x720 97 frames with Loras in 3 minutes only in the fastest mode
