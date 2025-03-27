@@ -363,22 +363,23 @@ class Inference(object):
         #         raise ValueError(f"Invalid model path: {dit_weight}")
         # if not model_path.exists():
         #     raise ValueError(f"model_path not exists: {model_path}")
-        model_path = "c:/ml/hi2v2.pt" #pretrained_model_path
+        model_path = "c:/ml/model.pt" #pretrained_model_path
         logger.info(f"Loading torch model {model_path}...")
         state_dict = torch.load(model_path, map_location=lambda storage, loc: storage)
         bare_model = False
-        if bare_model == "unknown" and ("ema" in state_dict or "module" in state_dict):
-            bare_model = False
-        if bare_model is False:
-            if load_key in state_dict:
-                state_dict = state_dict[load_key]
-            else:
-                raise KeyError(
-                    f"Missing key: `{load_key}` in the checkpoint: {model_path}. The keys in the checkpoint "
-                    f"are: {list(state_dict.keys())}."
-                )
+        # if bare_model == "unknown" and ("ema" in state_dict or "module" in state_dict):
+        #     bare_model = False
+        # if bare_model is False:
+        #     if load_key in state_dict:
+        #         state_dict = state_dict[load_key]
+        #     else:
+        #         raise KeyError(
+        #             f"Missing key: `{load_key}` in the checkpoint: {model_path}. The keys in the checkpoint "
+        #             f"are: {list(state_dict.keys())}."
+        #         )
         a, b = model.load_state_dict(state_dict, strict = False, assign = True ) #strict=True, 
         from mmgp import offload
+        offload.save_model( model, "e:/model.safetensors", do_quantize= True)
         # offload.save_model(model, "E:/ml/hunyuan_video_i2v_720_bf16v2.safetensors")
         # offload.save_model(model, "E:/ml/hunyuan_video_i2v_720_quanto_int8v2.safetensors", do_quantize=True)
 

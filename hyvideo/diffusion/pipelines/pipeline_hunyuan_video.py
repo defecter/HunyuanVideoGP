@@ -236,6 +236,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         )
         self.vae_scale_factor = 2 ** (len(self.vae.config.block_out_channels) - 1)
         self.image_processor = VaeImageProcessor(vae_scale_factor=self.vae_scale_factor)
+        self.noise_pertub = 0
 
     def encode_prompt(
         self,
@@ -729,6 +730,7 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         i2v_stability: bool = True,
         img_latents: Optional[torch.Tensor] = None,
         semantic_images=None,
+        few_step: bool = True, # False,
         **kwargs,
     ):
         r"""
@@ -1004,6 +1006,16 @@ class HunyuanVideoPipeline(DiffusionPipeline):
         # 7. Denoising loop
         num_warmup_steps = len(timesteps) - num_inference_steps * self.scheduler.order
         self._num_timesteps = len(timesteps)
+
+        if few_step and False:
+            start_latent_list = [0, 10, 20, 30, 40, 50]
+            self.scheduler.sigmas = self.scheduler.sigmas[start_latent_list]
+            num_inference_steps = 5
+            timesteps = timesteps[start_latent_list[:num_inference_steps]]
+
+        print('sigmas used in generation:', self.scheduler.sigmas)
+        print('inference timesteps used in generation:', timesteps)
+
 
         if callback != None:
             callback(-1, None, None)

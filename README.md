@@ -74,65 +74,85 @@ You will find the original Hunyuan Video repository here: https://github.com/Ten
  
 
 
-## Installation Guide for Linux and Windows
+## Installation Guide for Linux and Windows for GPUs up to RTX40xx
 
 **If you are looking for a one click installation, just go to the Pinokio App store : https://pinokio.computer/**
 
-We provide an `environment.yml` file for setting up a Conda environment.
-Conda's installation instructions are available [here](https://docs.anaconda.com/free/miniconda/index.html).
+Otherwise you will find the instructions below:
 
-This app has been tested on Python 3.10.9 /  2.6.0  / Cuda 12.4.\
-(Pytorch compilation will not properly work for long video on Pytorch 2.5.1)
+This app has been tested on Python 3.10 / 2.6.0  / Cuda 12.4.
 
 ```shell
-# 1 - conda. Prepare and activate a conda environment
-conda env create -f environment.yml
-conda activate HunyuanVideo
+# 0 Download the source and create a Python 3.10.9 environment using conda or create a venv using python
+git clone https://github.com/deepbeepmeep/HunyuanVideoGP
+cd Wan2GP
+conda create -n wan2gp python=3.10.9
+conda activate wan2gp
 
-# OR
-
-# 1 - venv. Alternatively create a python 3.10 venv and then do the following
-pip install torch==2.6.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/test/cu124  # if pytorch 2.6.0
-
+# 1 Install pytorch 2.6.0
+pip install torch==2.6.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/test/cu124  
 
 # 2. Install pip dependencies
-python -m pip install -r requirements.txt
+pip install -r requirements.txt
 
-# 3.1 optional Flash attention support (easy to install on Linux but much harder on Windows)
-python -m pip install flash-attn==2.7.2.post1
+# 3.1 optional Sage attention support (30% faster)
+# Windows only: extra step only needed for windows as triton is included in pytorch with the Linux version of pytorch
+pip install triton-windows 
+# For both Windows and Linux
+pip install sageattention==1.0.6 
 
-# 3.2 optional Sage attention support (30% faster, easy to install on Linux but much harder on Windows)
-python -m pip install sageattention==1.0.6 
 
-# or for Sage Attention 2 (40% faster, sorry, only manual compilation for the moment)
+# 3.2 optional Sage 2 attention support (40% faster)
+# Windows only
+pip install triton-windows 
+pip install https://github.com/woct0rdho/SageAttention/releases/download/v2.1.1-windows/sageattention-2.1.1+cu126torch2.6.0-cp310-cp310-win_amd64.whl
+# Linux only (sorry only manual compilation for the moment, but is straight forward with Linux)
 git clone https://github.com/thu-ml/SageAttention
 cd SageAttention 
 pip install -e .
 
-# 3.3 optional Xformers attention support (same speed as sdpa attention but lower VRAM requirements, easy to install on Linux but much harder on Windows)
-python -m pip install xformers==0.0.29
+# 3.3 optional Flash attention support (easy to install on Linux but may be complex on Windows as it will try to compile the cuda kernels)
+pip install flash-attn==2.7.2.post1
 
 ```
 
-Note that *Flash attention* and *Sage attention* are quite complex to install on Windows but offers a better memory management (and consequently longer videos) than the default *sdpa attention*.
-Likewise *Pytorch Compilation* will work on Windows only if you manage to install Triton. It is quite a complex process (see below for links).
+Note pytorch *sdpa attention* is available by default. It is worth installing *Sage attention* (albout not as simple as it sounds) because it offers a 30% speed boost over *sdpa attention* at a small quality cost.
+In order to install Sage, you will need to install also Triton. If Triton is installed you can turn on *Pytorch Compilation* which will give you an additional 20% speed boost and reduced VRAM consumption.
 
-### Ready to use python wheels for Windows users
-I provide here links to simplify the installation for Windows users with Python 3.10 / Pytorch 2.51 / Cuda 12.4. As I am not hosting these files I won't be able to provide support neither guarantee they do what they should do.
-- Triton attention (needed for *pytorch compilation* and *Sage attention*)
+## Installation Guide for Linux and Windows for GPUs up to RTX50xx
+RTX50XX are only supported by pytorch starting from pytorch 2.7.0 which is still in beta. Therefore this version may be less stable.\
+It is important to use Python 3.10 otherwise the pip wheels may not be compatible.
 ```
-pip install https://github.com/woct0rdho/triton-windows/releases/download/v3.2.0-windows.post9/triton-3.2.0-cp310-cp310-win_amd64.whl # triton for pytorch 2.6.0
-```
-- Xformers attention
-```
-pip install https://download.pytorch.org/whl/cu124/xformers-0.0.29.post1-cp310-cp310-win_amd64.whl
+# 0 Download the source and create a Python 3.10.9 environment using conda or create a venv using python
+git clone https://github.com/deepbeepmeep/HunyuanVideoGP
+cd Wan2GP
+conda create -n wan2gp python=3.10.9
+conda activate wan2gp
+
+# 1 Install pytorch 2.7.0:
+pip install torch==2.7.0 torchvision torchaudio --index-url https://download.pytorch.org/whl/test/cu128
+
+# 2. Install pip dependencies
+pip install -r requirements.txt
+
+# 3.1 optional Sage attention support (30% faster)
+# Windows only: extra step only needed for windows as triton is included in pytorch with the Linux version of pytorch
+pip install triton-windows 
+# For both Windows and Linux
+pip install sageattention==1.0.6 
+
+
+# 3.2 optional Sage 2 attention support (40% faster)
+# Windows only
+pip install triton-windows 
+pip install https://github.com/woct0rdho/SageAttention/releases/download/v2.1.1-windows/sageattention-2.1.1+cu128torch2.7.0-cp310-cp310-win_amd64.whl 
+
+# Linux only (sorry only manual compilation for the moment, but is straight forward with Linux)
+git clone https://github.com/thu-ml/SageAttention
+cd SageAttention 
+pip install -e .
 ```
 
-- Sage attention
-```
-pip install https://github.com/deepbeepmeep/SageAttention/raw/refs/heads/main/releases/sageattention-2.1.0-cp310-cp310-win_amd64.whl # for pytorch 2.6.0 (experimental, if it works, otherwise you you will need to install and compile manually, see above) 
- 
-```
 
 ## Run the application
 

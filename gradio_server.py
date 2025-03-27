@@ -22,6 +22,13 @@ import torch
 import gc
 import traceback
 
+target_mmgp_version = "3.3.4"
+from importlib.metadata import version
+mmgp_version = version("mmgp")
+if mmgp_version != target_mmgp_version:
+    print(f"Incorrect version of mmgp ({mmgp_version}), version {target_mmgp_version} is needed. Please upgrade with the command 'pip install -r requirements.txt'")
+    exit()
+
 attention_modes_supported = get_attention_modes()
 
 args = parse_args()
@@ -39,7 +46,7 @@ preload =int(args.preload)
 
 quantizeTransformer = args.quantize_transformer
 
-transformer_choices_t2v=["ckpts/hunyuan-video-t2v-720p/transformers/hunyuan_video_720_bf16.safetensors", "ckpts/hunyuan-video-t2v-720p/transformers/hunyuan_video_720_quanto_int8.safetensors", "ckpts/hunyuan-video-t2v-720p/transformers/fast_hunyuan_video_720_quanto_int8.safetensors"]
+transformer_choices_t2v=["ckpts/hunyuan-video-t2v-720p/transformers/hunyuan_video_720_bf16.safetensors", "ckpts/hunyuan-video-t2v-720p/transformers/hunyuan_video_720_quanto_int8.safetensors", "ckpts/hunyuan-video-t2v-720p/transformers/fast_hunyuan_video_720_quanto_int8.safetensors", "ckpts/hunyuan-video-t2v-720p/transformers/accvideo_hunyuan_video_720_quanto_int8.safetensors"]
 transformer_choices_i2v=["ckpts/hunyuan-video-i2v-720p/transformers/hunyuan_video_i2v_720_bf16v2.safetensors", "ckpts/hunyuan-video-i2v-720p/transformers/hunyuan_video_i2v_720_quanto_int8v2.safetensors", "ckpts/hunyuan-video-t2v-720p/transformers/fast_hunyuan_video_720_quanto_int8.safetensors"]
 text_encoder_choices = ["ckpts/text_encoder/llava-llama-3-8b-v1_1_vlm_fp16.safetensors", "ckpts/text_encoder/llava-llama-3-8b-v1_1_vlm_quanto_int8.safetensors"]
 
@@ -340,9 +347,15 @@ def get_default_steps_flow(fast_hunyan ):
     else:
         return 6 if fast_hunyan else 30, 17.0 if fast_hunyan else 7.0 
 
-def generate_header(fast_hunyan, compile, attention_mode):
+def generate_header(transformer_filename, compile, attention_mode):
     header = "<H2 ALIGN=CENTER><SPAN> ----------------- "
-    header += ("Fast HunyuanVideo model" if fast_hunyan else "HunyuanVideo model") 
+    if "fast" in transformer_filename:
+        header += "Fast HunyuanVideo model" 
+    elif "acc" in transformer_filename:
+        header += "AccVideo model"
+    else:
+        header += "HunyuanVideo model"
+
     header += (" Image to Video" if use_image2video else " Text to Video") 
     header += " (attention mode: " + (attention_mode if attention_mode!="auto" else "auto/" + get_auto_attention() )
     if attention_mode not in attention_modes_supported:
@@ -449,8 +462,8 @@ def update_defaults(state, num_inference_steps,flow_shift):
     if  "transformer_filename" in changes:
         if new_fast_hunyuan != old_fast_hunyuan:
             num_inference_steps, flow_shift = get_default_steps_flow(new_fast_hunyuan)
-
-    header = generate_header(new_fast_hunyuan, server_config["compile"], server_config["attention_mode"] )
+    transformer_filename = server_config["transformer_filename"] if use_image2video else  server_config["transformer_filename_i2v"] 
+    header = generate_header(transformer_filename, server_config["compile"], server_config["attention_mode"] )
     new_loras_choices = [ (loras_name, str(i)) for i,loras_name in enumerate(loras_names)]
     lset_choices = [ (preset, preset) for preset in loras_presets]
     lset_choices.append( (new_preset_msg, ""))
@@ -834,8 +847,7 @@ def generate_video(
                         embedded_guidance_scale=embedded_guidance_scale,
                         callback = callback,
                         callback_steps = 1,
-                        enable_riflex= enable_riflex
-
+                        enable_riflex= enable_riflex,
                     )
                 except Exception as e:
                     gen_in_progress = False
@@ -1074,7 +1086,7 @@ def create_demo():
         #         h2 span {background:#fff;  padding:0 10px; }</STYLE>"""
         # gr.HTML(css)
 
-        header = gr.Markdown(generate_header(fast_hunyan, compile, attention_mode) , visible= not args.lock_config )            
+        header = gr.Markdown(generate_header(transformer_filename_i2v if use_image2video else transformer_filename_t2v, compile, attention_mode) , visible= not args.lock_config )            
 
         with gr.Accordion("Video Engine Configuration - click here to change it", open = False):
             gr.Markdown("For the changes to be effective you will need to restart the gradio_server. Some choices below may be locked if the app has been launched by specifying a config preset.")
@@ -1087,6 +1099,7 @@ def create_demo():
                         ("Hunyuan Text to Video 16 bits - the default engine in its original glory, offers a slightly better image quality but slower and requires more RAM", 0),
                         ("Hunyuan Text to Video quantized to 8 bits (recommended) - the default engine but quantized", 1),
                         ("Fast Hunyuan Text to Video quantized to 8 bits - requires less than 10 steps but worse quality", 2), 
+                        ("AccVideo Hunyuan Text to Video quantized to 8 bits - requires less than 10 steps but worse quality", 3), 
                     ],
                     value= index,
                     label="Transformer model for Text to Video",
