@@ -341,11 +341,16 @@ def get_auto_attention():
             return attn
     return "sdpa"
 
-def get_default_steps_flow(fast_hunyan ):
+def get_default_steps_flow(transformer_file ):
     if use_image2video:
         return 30, 7 #17 
     else:
-        return 6 if fast_hunyan else 30, 17.0 if fast_hunyan else 7.0 
+        if "fast" in transformer_file:
+            return 6, 17.
+        elif "acc" in transformer_file:
+            return 5, 7.
+        else:
+            return 30, 7.
 
 def generate_header(transformer_filename, compile, attention_mode):
     header = "<H2 ALIGN=CENTER><SPAN> ----------------- "
@@ -451,18 +456,20 @@ def apply_changes(  state,
 
 def update_defaults(state, num_inference_steps,flow_shift):
     if "config_changes" not in state:
-        return get_default_steps_flow(False)
+        return get_default_steps_flow(transformer_filename_i2v if use_image2video else transformer_filename_t2v )
     changes = state["config_changes"] 
     server_config = state["config_new"] 
     old_server_config = state["config_old"] 
 
     new_fast_hunyuan = "fast" in server_config["transformer_filename"]
     old_fast_hunyuan = "fast" in old_server_config["transformer_filename"]
+    new_acc_hunyuan = "acc" in server_config["transformer_filename"]
+    old_acc_hunyuan = "acc" in old_server_config["transformer_filename"]
 
+    transformer_filename = server_config["transformer_filename_i2v"] if use_image2video else  server_config["transformer_filename"] 
     if  "transformer_filename" in changes:
-        if new_fast_hunyuan != old_fast_hunyuan:
-            num_inference_steps, flow_shift = get_default_steps_flow(new_fast_hunyuan)
-    transformer_filename = server_config["transformer_filename"] if use_image2video else  server_config["transformer_filename_i2v"] 
+        if new_fast_hunyuan != old_fast_hunyuan or new_acc_hunyuan != old_acc_hunyuan :
+            num_inference_steps, flow_shift = get_default_steps_flow(transformer_filename)
     header = generate_header(transformer_filename, server_config["compile"], server_config["attention_mode"] )
     new_loras_choices = [ (loras_name, str(i)) for i,loras_name in enumerate(loras_names)]
     lset_choices = [ (preset, preset) for preset in loras_presets]
@@ -1058,15 +1065,15 @@ def apply_lset(lset_name, loras_choices, loras_mult_choices, prompt):
 
 def create_demo():
     
-    default_inference_steps, default_flow_shift = get_default_steps_flow(fast_hunyan)
+    default_inference_steps, default_flow_shift = get_default_steps_flow(transformer_filename_i2v if use_image2video else transformer_filename_t2v)
     
     with gr.Blocks() as demo:
         state = gr.State({})
        
         if use_image2video:
-            gr.Markdown("<div align=center><H1>HunyuanVideo<SUP>GP</SUP> v6 - AI Image To Video Generator (<A HREF='https://github.com/deepbeepmeep/HunyuanVideoGP'>Updates</A> / <A HREF='https://github.com/Tencent/HunyuanVideo'>Original by Tencent</A>)</H1></div>")
+            gr.Markdown("<div align=center><H1>HunyuanVideo<SUP>GP</SUP> v6.3 - AI Image To Video Generator (<A HREF='https://github.com/deepbeepmeep/HunyuanVideoGP'>Updates</A> / <A HREF='https://github.com/Tencent/HunyuanVideo'>Original by Tencent</A>)</H1></div>")
         else:
-            gr.Markdown("<div align=center><H1>HunyuanVideo<SUP>GP</SUP> v6 - AI Text To Video Generator (<A HREF='https://github.com/deepbeepmeep/HunyuanVideoGP'>Updates</A> / <A HREF='https://github.com/Tencent/HunyuanVideo'>Original by Tencent</A>)</H1></div>")
+            gr.Markdown("<div align=center><H1>HunyuanVideo<SUP>GP</SUP> v6.3 - AI Text To Video Generator (<A HREF='https://github.com/deepbeepmeep/HunyuanVideoGP'>Updates</A> / <A HREF='https://github.com/Tencent/HunyuanVideo'>Original by Tencent</A>)</H1></div>")
 
         gr.Markdown("<FONT SIZE=3>Welcome to HunyuanVideoGP by <B>DeepBeepMeep</B>, a super fast and low VRAM Video Generator !</FONT>")
 

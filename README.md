@@ -17,7 +17,8 @@
 
 
 ## News
-r
+
+* 03/27/2025 version 6.3: Official RTX 50xx support (see installation instructions below)  + added support for a AccVideo distilled HunyanVideo model. Only needs 5 steps. Not as good as the original model but seems better that Fast HuyuanVideo.  
 * 03/15/2025 version 6.2: 
   Lora Fest special edition: very fast loading / unload of loras for those Loras collectors around. You can also now add / remove loras in the Lora folder without restarting the app. You will need to refresh the requirements *pip install -r
 * 03/07/2025: Version 6.1: Upgraded HunyanVideo Image to Video with new model released today (that obviously replaces the model of yesterday) \ 
