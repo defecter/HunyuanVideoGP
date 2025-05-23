@@ -19,6 +19,8 @@ from hyvideo.modules.models import get_linear_split_map
 import asyncio
 from mmgp import offload, safetensors2, profile_type 
 import torch
+torch.backends.cuda.matmul.allow_tf32 = True  # Faster FP16 math
+torch.set_float32_matmul_precision('high')    # Optimizes GPU ops
 import gc
 import traceback
 
@@ -313,7 +315,8 @@ def load_models(i2v,  lora_dir,  lora_preselected_preset ):
         pipe = { "transformer" : hunyuan_video_sampler.model, "text_encoder_2" : hunyuan_video_sampler.text_encoder_2, "vae" : hunyuan_video_sampler.vae  }
         pipe.update(offload.extract_models(hunyuan_video_sampler.text_encoder_vlm), "text_encoder")
     else:
-        hunyuan_video_sampler = HunyuanVideoSampler.from_pretrained(transformer_filename_i2v if i2v else transformer_filename_t2v, text_encoder_filename, attention_mode = attention_mode, args=args,  device="cpu") #pinToMemory = pinToMemory, partialPinning = partialPinning,  
+        hunyuan_video_sampler = HunyuanVideoSampler.from_pretrained(transformer_filename_i2v if i2v else transformer_filename_t2v, text_encoder_filename, attention_mode = attention_mode, args=args,  device="cpu"
+        ) #pinToMemory = pinToMemory, partialPinning = partialPinning,  
         pipe = hunyuan_video_sampler.pipeline
         pipe.transformer.any_compilation = len(compile)>0
 
@@ -454,30 +457,79 @@ def apply_changes(  state,
 
     # return "<DIV ALIGN=CENTER>New Config file created. Please restart the Gradio Server</DIV>"
 
-def update_defaults(state, num_inference_steps,flow_shift):
+# def update_defaults(state, num_inference_steps,flow_shift):
+#     if "config_changes" not in state:
+#         return get_default_steps_flow(transformer_filename_i2v if use_image2video else transformer_filename_t2v )
+#     changes = state["config_changes"] 
+#     server_config = state["config_new"] 
+#     old_server_config = state["config_old"] 
+
+#     new_fast_hunyuan = "fast" in server_config["transformer_filename"]
+#     old_fast_hunyuan = "fast" in old_server_config["transformer_filename"]
+#     new_acc_hunyuan = "acc" in server_config["transformer_filename"]
+#     old_acc_hunyuan = "acc" in old_server_config["transformer_filename"]
+
+#     transformer_filename = server_config["transformer_filename_i2v"] if use_image2video else  server_config["transformer_filename"] 
+#     if  "transformer_filename" in changes:
+#         if new_fast_hunyuan != old_fast_hunyuan or new_acc_hunyuan != old_acc_hunyuan :
+#             num_inference_steps, flow_shift = get_default_steps_flow(transformer_filename)
+#     header = generate_header(transformer_filename, server_config["compile"], server_config["attention_mode"] )
+#     new_loras_choices = [ (loras_name, str(i)) for i,loras_name in enumerate(loras_names)]
+#     lset_choices = [ (preset, preset) for preset in loras_presets]
+#     lset_choices.append( (new_preset_msg, ""))
+
+#     return num_inference_steps, flow_shift, header,  gr.Dropdown(choices=lset_choices, value= ""), gr.Dropdown(choices=new_loras_choices, value= [])  
+
+def update_defaults(state, num_inference_steps, flow_shift):
+    # Get transformer filename based on mode (t2v/i2v)
+    transformer_filename = state["config_new"]["transformer_filename_i2v"] if use_image2video else state["config_new"]["transformer_filename"]
+    
+    # Handle first-run case where config_changes doesn't exist
     if "config_changes" not in state:
-        return get_default_steps_flow(transformer_filename_i2v if use_image2video else transformer_filename_t2v )
-    changes = state["config_changes"] 
-    server_config = state["config_new"] 
-    old_server_config = state["config_old"] 
+        num_inference_steps, flow_shift = get_default_steps_flow(transformer_filename)
+        header = generate_header(
+            transformer_filename, 
+            state["config_new"]["compile"], 
+            state["config_new"]["attention_mode"]
+        )
+        return (
+            num_inference_steps, 
+            flow_shift, 
+            header,
+            gr.Dropdown(choices=[], value=""),  # Placeholder dropdown 1
+            gr.Dropdown(choices=[], value=[])   # Placeholder dropdown 2
+        )
+
+    # Existing logic for config changes
+    changes = state["config_changes"]
+    server_config = state["config_new"]
+    old_server_config = state["config_old"]
 
     new_fast_hunyuan = "fast" in server_config["transformer_filename"]
     old_fast_hunyuan = "fast" in old_server_config["transformer_filename"]
     new_acc_hunyuan = "acc" in server_config["transformer_filename"]
     old_acc_hunyuan = "acc" in old_server_config["transformer_filename"]
 
-    transformer_filename = server_config["transformer_filename_i2v"] if use_image2video else  server_config["transformer_filename"] 
-    if  "transformer_filename" in changes:
-        if new_fast_hunyuan != old_fast_hunyuan or new_acc_hunyuan != old_acc_hunyuan :
+    if "transformer_filename" in changes:
+        if new_fast_hunyuan != old_fast_hunyuan or new_acc_hunyuan != old_acc_hunyuan:
             num_inference_steps, flow_shift = get_default_steps_flow(transformer_filename)
-    header = generate_header(transformer_filename, server_config["compile"], server_config["attention_mode"] )
-    new_loras_choices = [ (loras_name, str(i)) for i,loras_name in enumerate(loras_names)]
-    lset_choices = [ (preset, preset) for preset in loras_presets]
-    lset_choices.append( (new_preset_msg, ""))
 
-    return num_inference_steps, flow_shift, header,  gr.Dropdown(choices=lset_choices, value= ""), gr.Dropdown(choices=new_loras_choices, value= [])  
+    header = generate_header(
+        transformer_filename, 
+        server_config["compile"], 
+        server_config["attention_mode"]
+    )
+    new_loras_choices = [(loras_name, str(i)) for i, loras_name in enumerate(loras_names)]
+    lset_choices = [(preset, preset) for preset in loras_presets]
+    lset_choices.append((new_preset_msg, ""))
 
-
+    return (
+        num_inference_steps, 
+        flow_shift, 
+        header,
+        gr.Dropdown(choices=lset_choices, value=""),
+        gr.Dropdown(choices=new_loras_choices, value=[])
+    )
 
 from moviepy.editor import ImageSequenceClip
 import numpy as np
